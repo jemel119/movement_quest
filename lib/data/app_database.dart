@@ -7,7 +7,11 @@ class AppDatabase {
   static const workoutPlansTable = 'workout_plans';
   static const trainingLogsTable = 'training_logs';
 
+  final String databaseName;
+
   Future<Database>? _databaseFuture;
+
+  AppDatabase({this.databaseName = fileName});
 
   Future<Database> get database async {
     final pending = _databaseFuture ??= _open();
@@ -26,7 +30,7 @@ class AppDatabase {
     final directory = await getDatabasesPath();
 
     return openDatabase(
-      path.join(directory, fileName),
+      path.join(directory, databaseName),
       version: version,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
