@@ -63,18 +63,20 @@ class WorkoutController extends ChangeNotifier {
     );
   }
 
-  Future<bool> savePlan(WorkoutPlan plan) {
-    return _perform(
+  Future<WorkoutPlan?> savePlan(WorkoutPlan plan) async {
+    WorkoutPlan? saved;
+
+    await _perform(
       action: () async {
-        if (plan.id == null) {
-          await _workouts.createPlan(plan);
-        } else {
-          await _workouts.updatePlan(plan);
-        }
+        saved = plan.id == null
+            ? await _workouts.createPlan(plan)
+            : await _workouts.updatePlan(plan);
       },
       failureMessage:
           'Could not save or refresh your workouts. Reload before retrying.',
     );
+
+    return saved;
   }
 
   Future<bool> deletePlan(int id) {

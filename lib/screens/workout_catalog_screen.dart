@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../controllers/workout_controller.dart';
 import '../models/workout_plan.dart';
 import '../widgets/workout_card.dart';
+import 'workout_editor_screen.dart';
 
 class WorkoutCatalogScreen extends StatefulWidget {
   const WorkoutCatalogScreen({super.key});
@@ -28,6 +29,18 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
         controller.load();
       }
     });
+  }
+
+  Future<void> _openEditor({WorkoutPlan? plan}) async {
+    final controller = context.read<WorkoutController>();
+
+    if (controller.isBusy) {
+      return;
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => WorkoutEditorScreen(plan: plan)),
+    );
   }
 
   @override
@@ -92,6 +105,12 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: controller.isBusy ? null : () => _openEditor(),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add plan'),
+                  ),
                 ],
               ),
             ),
@@ -139,9 +158,14 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
                       itemCount: plans.length,
                       itemBuilder: (context, index) {
+                        final plan = plans[index];
+
                         return WorkoutCard(
-                          key: ValueKey(plans[index].id),
-                          plan: plans[index],
+                          key: ValueKey(plan.id),
+                          plan: plan,
+                          onEdit: controller.isBusy
+                              ? null
+                              : () => _openEditor(plan: plan),
                         );
                       },
                     ),

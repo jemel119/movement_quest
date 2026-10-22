@@ -4,8 +4,9 @@ import '../models/workout_plan.dart';
 
 class WorkoutCard extends StatelessWidget {
   final WorkoutPlan plan;
+  final VoidCallback? onEdit;
 
-  const WorkoutCard({super.key, required this.plan});
+  const WorkoutCard({super.key, required this.plan, this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +24,14 @@ class WorkoutCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(plan.planNote),
             ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit),
+                label: const Text('Edit'),
+              ),
+            ),
           ],
         ),
       ),
