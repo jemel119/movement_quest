@@ -14,14 +14,14 @@ class WorkoutCatalogScreen extends StatefulWidget {
 }
 
 class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
+  bool _confirmingDelete = false;
+
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       final controller = context.read<WorkoutController>();
 
@@ -32,9 +32,7 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
   }
 
   Future<void> _openEditor({WorkoutPlan? plan}) async {
-    final controller = context.read<WorkoutController>();
-
-    if (controller.isBusy) {
+    if (_confirmingDelete || context.read<WorkoutController>().isBusy) {
       return;
     }
 
@@ -43,12 +41,59 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
     );
   }
 
+  Future<void> _deletePlan(WorkoutPlan plan) async {
+    final controller = context.read<WorkoutController>();
+
+    if (_confirmingDelete || controller.isBusy) return;
+
+    final id = plan.id;
+    if (id == null) return;
+
+    setState(() => _confirmingDelete = true);
+
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Delete workout plan?'),
+          content: Text(
+            'Delete "${plan.title}" and all its training logs? '
+            'This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted || confirmed != true) return;
+
+      final deleted = await controller.deletePlan(id);
+
+      if (!mounted || !deleted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Workout plan deleted.')));
+    } finally {
+      if (mounted) {
+        setState(() => _confirmingDelete = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<WorkoutController>(
       builder: (context, controller, child) {
+        final busy = controller.isBusy || _confirmingDelete;
         final plans = controller.plans;
-        final error = controller.error;
 
         return Column(
           children: [
@@ -63,16 +108,13 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
                     spacing: 16,
                     children: [
                       Text(
-                        'Completed sessions: ${controller.completedSessions}',
+                        'Completed sessions: '
+                        '${controller.completedSessions}',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       IconButton(
                         tooltip: 'Refresh workouts',
-                        onPressed: controller.isBusy
-                            ? null
-                            : () {
-                                controller.load();
-                              },
+                        onPressed: busy ? null : controller.load,
                         icon: const Icon(Icons.refresh),
                       ),
                     ],
@@ -87,9 +129,7 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
                       child: DropdownButton<String>(
                         value: controller.equipmentFilter,
                         isExpanded: true,
-                        onChanged: controller.isBusy
-                            ? null
-                            : controller.setEquipmentFilter,
+                        onChanged: busy ? null : controller.setEquipmentFilter,
                         items: [
                           const DropdownMenuItem<String>(
                             value: null,
@@ -107,25 +147,24 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
                   ),
                   const SizedBox(height: 12),
                   FilledButton.icon(
-                    onPressed: controller.isBusy ? null : () => _openEditor(),
+                    onPressed: busy ? null : () => _openEditor(),
                     icon: const Icon(Icons.add),
                     label: const Text('Add plan'),
                   ),
                 ],
               ),
             ),
-            if (error != null)
+            if (controller.error != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
                   children: [
-                    Text(error, semanticsLabel: 'Error: $error'),
+                    Text(
+                      controller.error!,
+                      semanticsLabel: 'Error: ${controller.error}',
+                    ),
                     TextButton(
-                      onPressed: controller.isBusy
-                          ? null
-                          : () {
-                              controller.load();
-                            },
+                      onPressed: busy ? null : controller.load,
                       child: const Text('Retry'),
                     ),
                   ],
@@ -150,7 +189,6 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
                           controller.equipmentFilter == null
                               ? 'No workout plans yet.'
                               : 'No plans match this equipment filter.',
-                          textAlign: TextAlign.center,
                         ),
                       ),
                     )
@@ -163,9 +201,8 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
                         return WorkoutCard(
                           key: ValueKey(plan.id),
                           plan: plan,
-                          onEdit: controller.isBusy
-                              ? null
-                              : () => _openEditor(plan: plan),
+                          onEdit: busy ? null : () => _openEditor(plan: plan),
+                          onDelete: busy ? null : () => _deletePlan(plan),
                         );
                       },
                     ),

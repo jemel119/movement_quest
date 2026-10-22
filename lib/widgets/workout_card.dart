@@ -5,8 +5,14 @@ import '../models/workout_plan.dart';
 class WorkoutCard extends StatelessWidget {
   final WorkoutPlan plan;
   final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
-  const WorkoutCard({super.key, required this.plan, this.onEdit});
+  const WorkoutCard({
+    super.key,
+    required this.plan,
+    this.onEdit,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -24,13 +30,21 @@ class WorkoutCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(plan.planNote),
             ],
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit),
-                label: const Text('Edit'),
-              ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit),
+                  label: const Text('Edit'),
+                ),
+                TextButton.icon(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Delete'),
+                ),
+              ],
             ),
           ],
         ),
