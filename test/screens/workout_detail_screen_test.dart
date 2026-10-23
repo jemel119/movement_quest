@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:movement_quest/models/training_log.dart';
 import 'package:movement_quest/models/workout_plan.dart';
+import 'package:movement_quest/repositories/training_log_repository.dart';
 import 'package:movement_quest/repositories/workout_repository.dart';
 import 'package:movement_quest/screens/workout_detail_screen.dart';
 import 'package:provider/provider.dart';
@@ -26,6 +28,12 @@ class DetailWorkoutRepository extends Fake implements WorkoutRepository {
   }
 }
 
+class DetailTrainingLogRepository extends Fake
+    implements TrainingLogRepository {
+  @override
+  Future<List<TrainingLog>> getLogs({int? workoutId}) async => [];
+}
+
 void main() {
   Future<void> openDetails(
     WidgetTester tester,
@@ -33,8 +41,13 @@ void main() {
     int workoutId = 7,
   }) async {
     await tester.pumpWidget(
-      Provider<WorkoutRepository>.value(
-        value: repository,
+      MultiProvider(
+        providers: [
+          Provider<WorkoutRepository>.value(value: repository),
+          Provider<TrainingLogRepository>(
+            create: (_) => DetailTrainingLogRepository(),
+          ),
+        ],
         child: MaterialApp(home: WorkoutDetailScreen(workoutId: workoutId)),
       ),
     );
@@ -124,5 +137,27 @@ void main() {
     expect(find.text('Recovered routine'), findsOneWidget);
     expect(find.text('Edit plan'), findsOneWidget);
     expect(find.text('Could not load this workout. Try again.'), findsNothing);
+  });
+
+  testWidgets('A loaded plan includes session controls', (tester) async {
+    final repository = DetailWorkoutRepository(
+      plan: WorkoutPlan(
+        id: 7,
+        title: 'Session routine',
+        equipmentTag: 'None',
+        effortPreference: 3,
+      ),
+    );
+
+    await openDetails(tester, repository);
+
+    final startButton = find.widgetWithText(FilledButton, 'Start session');
+
+    await tester.ensureVisible(startButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Workout session'), findsOneWidget);
+    expect(startButton, findsOneWidget);
+    expect(tester.widget<FilledButton>(startButton).onPressed, isNotNull);
   });
 }
