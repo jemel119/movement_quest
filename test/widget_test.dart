@@ -8,6 +8,9 @@ import 'package:movement_quest/models/workout_plan.dart';
 import 'package:movement_quest/repositories/training_log_repository.dart';
 import 'package:movement_quest/repositories/workout_repository.dart';
 import 'package:provider/provider.dart';
+import 'package:movement_quest/controllers/preferences_controller.dart';
+import 'package:movement_quest/repositories/shared_preferences_repository.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FakeWorkoutRepository extends Fake implements WorkoutRepository {
   final List<WorkoutPlan> records;
@@ -126,13 +129,28 @@ void main() {
       FakeTrainingLogRepository(),
     );
 
+    SharedPreferences.setMockInitialValues({});
+
+    final storage = await SharedPreferences.getInstance();
+
+    final preferencesController = PreferencesController(
+      SharedPreferencesRepository(storage),
+    );
+
     addTearDown(controller.dispose);
+    addTearDown(preferencesController.dispose);
 
     await controller.load();
+    await preferencesController.load();
 
     await tester.pumpWidget(
-      ChangeNotifierProvider<WorkoutController>.value(
-        value: controller,
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<WorkoutController>.value(value: controller),
+          ChangeNotifierProvider<PreferencesController>.value(
+            value: preferencesController,
+          ),
+        ],
         child: const MovementQuestApp(),
       ),
     );
@@ -180,10 +198,7 @@ void main() {
     await tester.tap(find.text('History'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Your training history will appear here.'),
-      findsOneWidget,
-    );
+    expect(find.text('Workout preferences'), findsOneWidget);
 
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();

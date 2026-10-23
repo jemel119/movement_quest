@@ -2,17 +2,23 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'controllers/preferences_controller.dart';
 import 'controllers/workout_controller.dart';
 import 'data/app_database.dart';
-import 'data/sqlite_training_log_repository.dart';
-import 'data/sqlite_workout_repository.dart';
+import 'repositories/preferences_repository.dart';
+import 'repositories/shared_preferences_repository.dart';
+import 'repositories/sqlite_training_log_repository.dart';
+import 'repositories/sqlite_workout_repository.dart';
 import 'repositories/training_log_repository.dart';
 import 'repositories/workout_repository.dart';
 import 'screens/home_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  final storage = await SharedPreferences.getInstance();
 
   runApp(
     MultiProvider(
@@ -29,11 +35,18 @@ void main() {
           create: (context) =>
               SqliteTrainingLogRepository(context.read<AppDatabase>()),
         ),
+        Provider<PreferencesRepository>(
+          create: (_) => SharedPreferencesRepository(storage),
+        ),
         ChangeNotifierProvider<WorkoutController>(
           create: (context) => WorkoutController(
             context.read<WorkoutRepository>(),
             context.read<TrainingLogRepository>(),
           ),
+        ),
+        ChangeNotifierProvider<PreferencesController>(
+          create: (context) =>
+              PreferencesController(context.read<PreferencesRepository>()),
         ),
       ],
       child: const MovementQuestApp(),

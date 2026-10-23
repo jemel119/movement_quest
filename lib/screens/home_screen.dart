@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'settings_screen.dart';
 import 'workout_catalog_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -17,7 +18,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _pages = [
     WorkoutCatalogScreen(),
     Center(child: Text('Your training history will appear here.')),
-    Center(child: Text('Your preferences will appear here.')),
+    SettingsScreen(),
   ];
 
   @override
