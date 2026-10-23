@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../controllers/workout_controller.dart';
 import '../models/workout_plan.dart';
 import '../widgets/workout_card.dart';
+import 'workout_detail_screen.dart';
 import 'workout_editor_screen.dart';
 
 class WorkoutCatalogScreen extends StatefulWidget {
@@ -15,6 +16,7 @@ class WorkoutCatalogScreen extends StatefulWidget {
 
 class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
   bool _confirmingDelete = false;
+  bool _openingPage = false;
 
   @override
   void initState() {
@@ -32,19 +34,60 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
   }
 
   Future<void> _openEditor({WorkoutPlan? plan}) async {
-    if (_confirmingDelete || context.read<WorkoutController>().isBusy) {
+    final controller = context.read<WorkoutController>();
+
+    if (_confirmingDelete || _openingPage || controller.isBusy) {
       return;
     }
 
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => WorkoutEditorScreen(plan: plan)),
-    );
+    setState(() => _openingPage = true);
+
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => WorkoutEditorScreen(plan: plan),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _openingPage = false);
+      }
+    }
+  }
+
+  Future<void> _openDetails(WorkoutPlan plan) async {
+    final controller = context.read<WorkoutController>();
+    final id = plan.id;
+
+    if (id == null || _confirmingDelete || _openingPage || controller.isBusy) {
+      return;
+    }
+
+    setState(() => _openingPage = true);
+
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => WorkoutDetailScreen(workoutId: id),
+        ),
+      );
+
+      if (!mounted) return;
+
+      await controller.load();
+    } finally {
+      if (mounted) {
+        setState(() => _openingPage = false);
+      }
+    }
   }
 
   Future<void> _deletePlan(WorkoutPlan plan) async {
     final controller = context.read<WorkoutController>();
 
-    if (_confirmingDelete || controller.isBusy) return;
+    if (_confirmingDelete || _openingPage || controller.isBusy) {
+      return;
+    }
 
     final id = plan.id;
     if (id == null) return;
@@ -92,7 +135,7 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
   Widget build(BuildContext context) {
     return Consumer<WorkoutController>(
       builder: (context, controller, child) {
-        final busy = controller.isBusy || _confirmingDelete;
+        final busy = controller.isBusy || _confirmingDelete || _openingPage;
         final plans = controller.plans;
 
         return Column(
@@ -201,6 +244,7 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
                         return WorkoutCard(
                           key: ValueKey(plan.id),
                           plan: plan,
+                          onView: busy ? null : () => _openDetails(plan),
                           onEdit: busy ? null : () => _openEditor(plan: plan),
                           onDelete: busy ? null : () => _deletePlan(plan),
                         );
