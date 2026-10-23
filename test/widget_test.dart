@@ -15,10 +15,13 @@ class FakeWorkoutRepository extends Fake implements WorkoutRepository {
   bool failWrites = false;
   bool failReads = false;
   bool failReadsAfterWrite = false;
+  bool failDeletes = false;
+
   Completer<void>? createGate;
 
   int createCalls = 0;
   int updateCalls = 0;
+  int deleteCalls = 0;
 
   FakeWorkoutRepository(List<WorkoutPlan> initialRecords)
     : records = List.of(initialRecords);
@@ -26,7 +29,7 @@ class FakeWorkoutRepository extends Fake implements WorkoutRepository {
   @override
   Future<List<WorkoutPlan>> getPlans({String? equipmentTag}) async {
     if (failReads) {
-      throw Exception('Simulated read failure');
+      throw Exception('Read failed.');
     }
 
     return records
@@ -41,19 +44,20 @@ class FakeWorkoutRepository extends Fake implements WorkoutRepository {
     createCalls++;
 
     final gate = createGate;
+
     if (gate != null) {
       await gate.future;
     }
 
     if (failWrites) {
-      throw Exception('Simulated write failure');
+      throw Exception('Save failed.');
     }
 
     final nextId =
-        records.fold<int>(
-          0,
-          (highest, record) => record.id! > highest ? record.id! : highest,
-        ) +
+        records.fold<int>(0, (largest, record) {
+          final id = record.id ?? 0;
+          return id > largest ? id : largest;
+        }) +
         1;
 
     final saved = plan.copyWith(id: nextId);
@@ -71,13 +75,13 @@ class FakeWorkoutRepository extends Fake implements WorkoutRepository {
     updateCalls++;
 
     if (failWrites) {
-      throw Exception('Simulated write failure');
+      throw Exception('Save failed.');
     }
 
     final index = records.indexWhere((record) => record.id == plan.id);
 
     if (index == -1) {
-      throw StateError('This workout plan no longer exists.');
+      throw StateError('Workout plan not found.');
     }
 
     records[index] = plan;
@@ -87,6 +91,23 @@ class FakeWorkoutRepository extends Fake implements WorkoutRepository {
     }
 
     return plan;
+  }
+
+  @override
+  Future<void> deletePlan(int id) async {
+    deleteCalls++;
+
+    if (failDeletes) {
+      throw Exception('Delete failed.');
+    }
+
+    final index = records.indexWhere((plan) => plan.id == id);
+
+    if (index == -1) {
+      throw StateError('Workout plan not found.');
+    }
+
+    records.removeAt(index);
   }
 }
 
@@ -106,6 +127,7 @@ void main() {
     );
 
     addTearDown(controller.dispose);
+
     await controller.load();
 
     await tester.pumpWidget(
@@ -114,6 +136,7 @@ void main() {
         child: const MovementQuestApp(),
       ),
     );
+
     await tester.pumpAndSettle();
 
     return controller;
@@ -142,36 +165,39 @@ void main() {
   }
 
   Future<void> tapSave(WidgetTester tester) async {
-    final save = find.widgetWithText(FilledButton, 'Save plan');
+    final button = find.widgetWithText(FilledButton, 'Save plan');
 
-    await tester.ensureVisible(save);
+    await tester.ensureVisible(button);
     await tester.pumpAndSettle();
-    await tester.tap(save);
+    await tester.tap(button);
   }
 
-  testWidgets('Navigation opens each main section', (tester) async {
+  testWidgets('Navigation switches between the main pages', (tester) async {
     await openApp(tester, exampleRepository());
 
-    expect(find.text('Movement Quest'), findsOneWidget);
-    expect(find.text('Completed sessions: 2'), findsOneWidget);
+    expect(find.text('No-equipment routine'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(NavigationDestination, 'History'));
+    await tester.tap(find.text('History'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Training History'), findsOneWidget);
+    expect(
+      find.text('Your training history will appear here.'),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.widgetWithText(NavigationDestination, 'Settings'));
+    await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
     expect(find.text('Your preferences will appear here.'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(NavigationDestination, 'Workouts'));
+    await tester.tap(find.text('Workouts'));
     await tester.pumpAndSettle();
 
     expect(find.text('No-equipment routine'), findsOneWidget);
+    expect(find.text('Band routine'), findsOneWidget);
   });
 
-  testWidgets('Equipment dropdown filters the visible plans', (tester) async {
+  testWidgets('Equipment filtering updates the visible plans', (tester) async {
     await openApp(tester, exampleRepository());
 
     await tester.tap(find.byType(DropdownButton<String>));
@@ -182,6 +208,7 @@ void main() {
 
     expect(find.text('Band routine'), findsOneWidget);
     expect(find.text('No-equipment routine'), findsNothing);
+    expect(find.text('Completed sessions: 2'), findsOneWidget);
 
     await tester.tap(find.byType(DropdownButton<String>));
     await tester.pumpAndSettle();
@@ -193,56 +220,62 @@ void main() {
     expect(find.text('Completed sessions: 2'), findsOneWidget);
   });
 
-  testWidgets('Empty catalog displays an explicit message', (tester) async {
+  testWidgets('An empty repository shows the empty catalog', (tester) async {
     await openApp(tester, FakeWorkoutRepository([]));
 
     expect(find.text('No workout plans yet.'), findsOneWidget);
+    expect(find.text('Add plan'), findsOneWidget);
   });
 
-  testWidgets('Blank title prevents saving', (tester) async {
+  testWidgets('A blank title is rejected without saving', (tester) async {
     final repository = FakeWorkoutRepository([]);
+
     await openApp(tester, repository);
     await openAddForm(tester);
 
-    await tester.enterText(find.byType(TextFormField).first, '   ');
+    await tester.enterText(find.byType(TextFormField).first, '  ');
+
     await tapSave(tester);
     await tester.pumpAndSettle();
 
     expect(find.text('Enter a workout title.'), findsOneWidget);
     expect(repository.createCalls, 0);
     expect(repository.records, isEmpty);
+    expect(find.text('Add workout plan'), findsOneWidget);
   });
 
-  testWidgets('Valid form creates one plan and refreshes the catalog', (
-    tester,
-  ) async {
+  testWidgets('A valid form saves trimmed values and closes', (tester) async {
     final repository = FakeWorkoutRepository([]);
+
     await openApp(tester, repository);
     await openAddForm(tester);
 
     await tester.enterText(
       find.byType(TextFormField).first,
-      '  Evening routine  ',
+      ' Evening routine ',
     );
     await tester.enterText(
       find.byType(TextFormField).at(1),
-      '  My chosen exercises  ',
+      ' My chosen exercises ',
     );
 
     await tapSave(tester);
     await tester.pumpAndSettle();
 
     expect(repository.createCalls, 1);
-    expect(repository.records.length, 1);
-    expect(repository.records.single.title, 'Evening routine');
-    expect(repository.records.single.planNote, 'My chosen exercises');
-    expect(repository.records.single.equipmentTag, 'None');
-    expect(repository.records.single.effortPreference, 3);
+    expect(repository.records, hasLength(1));
+
+    final saved = repository.records.single;
+
+    expect(saved.title, 'Evening routine');
+    expect(saved.planNote, 'My chosen exercises');
+    expect(saved.equipmentTag, 'None');
+    expect(saved.effortPreference, 3);
     expect(find.text('Add workout plan'), findsNothing);
     expect(find.text('Evening routine'), findsOneWidget);
   });
 
-  testWidgets('Edit loads saved fields and updates the existing plan', (
+  testWidgets('Editing preserves the plan ID and unchanged values', (
     tester,
   ) async {
     final repository = FakeWorkoutRepository([
@@ -256,47 +289,56 @@ void main() {
     ]);
 
     await openApp(tester, repository);
+
     await tester.tap(find.text('Edit'));
     await tester.pumpAndSettle();
 
-    final fields = tester
-        .widgetList<TextFormField>(find.byType(TextFormField))
-        .toList();
+    expect(find.text('Edit workout plan'), findsOneWidget);
 
-    expect(fields[0].controller!.text, 'Original routine');
-    expect(fields[1].controller!.text, 'Original note');
-    expect(find.text('Effort preference: 4 of 5'), findsOneWidget);
-
-    await tester.enterText(
+    final titleField = tester.widget<TextFormField>(
       find.byType(TextFormField).first,
-      'Corrected routine',
     );
+    final noteField = tester.widget<TextFormField>(
+      find.byType(TextFormField).at(1),
+    );
+
+    expect(titleField.controller!.text, 'Original routine');
+    expect(noteField.controller!.text, 'Original note');
+
+    await tester.enterText(find.byType(TextFormField).first, 'Updated routine');
 
     await tapSave(tester);
     await tester.pumpAndSettle();
 
-    expect(repository.updateCalls, 1);
     expect(repository.createCalls, 0);
-    expect(repository.records.single.id, 7);
-    expect(repository.records.single.title, 'Corrected routine');
-    expect(repository.records.single.equipmentTag, 'Band');
-    expect(repository.records.single.planNote, 'Original note');
-    expect(repository.records.single.effortPreference, 4);
-    expect(find.text('Corrected routine'), findsOneWidget);
+    expect(repository.updateCalls, 1);
+    expect(repository.records, hasLength(1));
+
+    final saved = repository.records.single;
+
+    expect(saved.id, 7);
+    expect(saved.title, 'Updated routine');
+    expect(saved.equipmentTag, 'Band');
+    expect(saved.planNote, 'Original note');
+    expect(saved.effortPreference, 4);
+    expect(find.text('Updated routine'), findsOneWidget);
   });
 
   testWidgets('Cancel allows keeping or discarding unsaved changes', (
     tester,
   ) async {
     final repository = FakeWorkoutRepository([]);
+
     await openApp(tester, repository);
     await openAddForm(tester);
 
     await tester.enterText(find.byType(TextFormField).first, 'Unsaved routine');
 
-    await tester.ensureVisible(find.text('Cancel'));
+    final cancelButton = find.widgetWithText(TextButton, 'Cancel');
+
+    await tester.ensureVisible(cancelButton);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Cancel'));
+    await tester.tap(cancelButton);
     await tester.pumpAndSettle();
 
     expect(find.text('Discard changes?'), findsOneWidget);
@@ -304,23 +346,24 @@ void main() {
     await tester.tap(find.text('Keep editing'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Add workout plan'), findsOneWidget);
-    expect(
-      tester
-          .widget<TextFormField>(find.byType(TextFormField).first)
-          .controller!
-          .text,
-      'Unsaved routine',
+    final titleField = tester.widget<TextFormField>(
+      find.byType(TextFormField).first,
     );
 
-    await tester.tap(find.text('Cancel'));
+    expect(titleField.controller!.text, 'Unsaved routine');
+
+    await tester.ensureVisible(cancelButton);
+    await tester.pumpAndSettle();
+    await tester.tap(cancelButton);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Discard'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Add workout plan'), findsNothing);
     expect(repository.records, isEmpty);
+    expect(repository.createCalls, 0);
+    expect(find.text('Add workout plan'), findsNothing);
+    expect(find.text('Add plan'), findsOneWidget);
   });
 
   testWidgets('System Back confirms before discarding changes', (tester) async {
@@ -347,12 +390,12 @@ void main() {
     expect(repository.records, isEmpty);
   });
 
-  testWidgets('Failed save preserves the form and allows retry', (
-    tester,
-  ) async {
-    final repository = FakeWorkoutRepository([])..failWrites = true;
+  testWidgets('A failed save preserves input and allows retry', (tester) async {
+    final repository = FakeWorkoutRepository([]);
+    repository.failWrites = true;
 
-    await openApp(tester, repository);
+    final controller = await openApp(tester, repository);
+
     await openAddForm(tester);
 
     await tester.enterText(find.byType(TextFormField).first, 'Retry routine');
@@ -360,39 +403,41 @@ void main() {
     await tapSave(tester);
     await tester.pumpAndSettle();
 
-    expect(find.text('Add workout plan'), findsOneWidget);
     expect(repository.records, isEmpty);
-    expect(
-      tester
-          .widget<TextFormField>(find.byType(TextFormField).first)
-          .controller!
-          .text,
-      'Retry routine',
+    expect(repository.createCalls, 1);
+    expect(controller.error, isNotNull);
+    expect(find.text('Add workout plan'), findsOneWidget);
+
+    final titleField = tester.widget<TextFormField>(
+      find.byType(TextFormField).first,
     );
+
+    expect(titleField.controller!.text, 'Retry routine');
 
     repository.failWrites = false;
 
     await tapSave(tester);
     await tester.pumpAndSettle();
 
-    expect(repository.records.single.title, 'Retry routine');
     expect(repository.createCalls, 2);
+    expect(repository.records, hasLength(1));
+    expect(repository.records.single.title, 'Retry routine');
     expect(find.text('Add workout plan'), findsNothing);
+    expect(find.text('Retry routine'), findsOneWidget);
   });
 
-  testWidgets('Pending save blocks another write and back navigation', (
+  testWidgets('A pending save disables submission and blocks Back', (
     tester,
   ) async {
+    final repository = FakeWorkoutRepository([]);
     final gate = Completer<void>();
-    final repository = FakeWorkoutRepository([])..createGate = gate;
+
+    repository.createGate = gate;
 
     await openApp(tester, repository);
     await openAddForm(tester);
 
-    await tester.enterText(
-      find.byType(TextFormField).first,
-      'Single-save routine',
-    );
+    await tester.enterText(find.byType(TextFormField).first, 'Pending routine');
 
     await tapSave(tester);
     await tester.pump();
@@ -402,6 +447,7 @@ void main() {
     final saveButton = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Saving...'),
     );
+
     expect(saveButton.onPressed, isNull);
 
     await tester.binding.handlePopRoute();
@@ -409,40 +455,179 @@ void main() {
 
     expect(find.text('Add workout plan'), findsOneWidget);
     expect(find.text('Discard changes?'), findsNothing);
-    expect(repository.createCalls, 1);
 
     gate.complete();
     await tester.pumpAndSettle();
 
-    expect(repository.records.length, 1);
+    expect(repository.createCalls, 1);
+    expect(repository.records, hasLength(1));
     expect(find.text('Add workout plan'), findsNothing);
+    expect(find.text('Pending routine'), findsOneWidget);
   });
 
-  testWidgets(
-    'Successful write with failed refresh does not invite a duplicate',
-    (tester) async {
-      final repository = FakeWorkoutRepository([])..failReadsAfterWrite = true;
+  testWidgets('A refresh failure after saving does not duplicate the plan', (
+    tester,
+  ) async {
+    final repository = FakeWorkoutRepository([]);
+    repository.failReadsAfterWrite = true;
 
-      final controller = await openApp(tester, repository);
-      await openAddForm(tester);
+    final controller = await openApp(tester, repository);
 
-      await tester.enterText(find.byType(TextFormField).first, 'Saved routine');
+    await openAddForm(tester);
 
-      await tapSave(tester);
-      await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).first, 'Saved routine');
 
-      expect(repository.createCalls, 1);
-      expect(repository.records.length, 1);
-      expect(find.text('Add workout plan'), findsNothing);
-      expect(find.text(controller.error!), findsOneWidget);
+    await tapSave(tester);
+    await tester.pumpAndSettle();
 
-      repository.failReads = false;
+    expect(repository.createCalls, 1);
+    expect(repository.records, hasLength(1));
+    expect(find.text('Add workout plan'), findsNothing);
+    expect(controller.error, isNotNull);
+    expect(find.text(controller.error!), findsOneWidget);
 
-      await tester.tap(find.text('Retry'));
-      await tester.pumpAndSettle();
+    repository.failReads = false;
 
-      expect(find.text('Saved routine'), findsOneWidget);
-      expect(repository.createCalls, 1);
-    },
-  );
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+
+    expect(repository.createCalls, 1);
+    expect(repository.records, hasLength(1));
+    expect(find.text('Saved routine'), findsOneWidget);
+    expect(controller.error, isNull);
+  });
+
+  testWidgets('Cancelling deletion keeps the workout plan', (tester) async {
+    final repository = exampleRepository();
+
+    await openApp(tester, repository);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Delete').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete workout plan?'), findsOneWidget);
+    expect(
+      find.text(
+        'Delete "No-equipment routine" and all its training logs? '
+        'This cannot be undone.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Cancel'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteCalls, 0);
+    expect(repository.records, hasLength(2));
+    expect(find.text('No-equipment routine'), findsOneWidget);
+    expect(find.text('Delete workout plan?'), findsNothing);
+  });
+
+  testWidgets('Confirming deletion removes only the selected plan', (
+    tester,
+  ) async {
+    final repository = exampleRepository();
+
+    await openApp(tester, repository);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Delete').first);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Delete'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteCalls, 1);
+    expect(repository.records, hasLength(1));
+    expect(repository.records.single.title, 'Band routine');
+    expect(find.text('No-equipment routine'), findsNothing);
+    expect(find.text('Band routine'), findsOneWidget);
+    expect(find.text('Workout plan deleted.'), findsOneWidget);
+  });
+
+  testWidgets('Deleting the final plan shows the empty catalog', (
+    tester,
+  ) async {
+    final repository = FakeWorkoutRepository([
+      WorkoutPlan(
+        id: 1,
+        title: 'Only routine',
+        equipmentTag: 'None',
+        effortPreference: 2,
+      ),
+    ]);
+
+    await openApp(tester, repository);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Delete'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteCalls, 1);
+    expect(repository.records, isEmpty);
+    expect(find.text('Only routine'), findsNothing);
+    expect(find.text('No workout plans yet.'), findsOneWidget);
+  });
+
+  testWidgets('Failed deletion keeps the plan and allows another attempt', (
+    tester,
+  ) async {
+    final repository = exampleRepository();
+    repository.failDeletes = true;
+
+    final controller = await openApp(tester, repository);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Delete').first);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Delete'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteCalls, 1);
+    expect(repository.records, hasLength(2));
+    expect(find.text('No-equipment routine'), findsOneWidget);
+    expect(controller.error, isNotNull);
+    expect(find.text(controller.error!), findsOneWidget);
+    expect(find.text('Workout plan deleted.'), findsNothing);
+
+    repository.failDeletes = false;
+
+    await tester.tap(find.widgetWithText(TextButton, 'Delete').first);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Delete'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.deleteCalls, 2);
+    expect(repository.records, hasLength(1));
+    expect(find.text('No-equipment routine'), findsNothing);
+    expect(find.text('Band routine'), findsOneWidget);
+    expect(controller.error, isNull);
+  });
 }
