@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../controllers/session_controller.dart';
+import '../models/training_log.dart';
+import 'training_set_editor_dialog.dart';
 
 class WorkoutSessionPanel extends StatefulWidget {
   final SessionController controller;
@@ -19,9 +21,10 @@ class _WorkoutSessionPanelState extends State<WorkoutSessionPanel> {
   final _exerciseController = TextEditingController();
   final _repetitionsController = TextEditingController();
 
-  bool _confirmingReset = false;
+  bool _dialogOpen = false;
 
   void _startSession() {
+    if (widget.controller.isBusy || _dialogOpen) return;
     if (!_startFormKey.currentState!.validate()) return;
 
     FocusScope.of(context).unfocus();
@@ -36,6 +39,7 @@ class _WorkoutSessionPanelState extends State<WorkoutSessionPanel> {
   }
 
   Future<void> _addSet() async {
+    if (widget.controller.isBusy || _dialogOpen) return;
     if (!_setFormKey.currentState!.validate()) return;
 
     FocusScope.of(context).unfocus();
@@ -52,10 +56,70 @@ class _WorkoutSessionPanelState extends State<WorkoutSessionPanel> {
     _repetitionsController.clear();
   }
 
-  Future<void> _resetSession() async {
-    if (_confirmingReset || widget.controller.isBusy) return;
+  Future<void> _editSet(TrainingLog log) async {
+    if (_dialogOpen || widget.controller.isBusy) return;
 
-    setState(() => _confirmingReset = true);
+    setState(() => _dialogOpen = true);
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) =>
+            TrainingSetEditorDialog(controller: widget.controller, log: log),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _dialogOpen = false);
+      }
+    }
+  }
+
+  Future<void> _deleteSet(TrainingLog log) async {
+    if (_dialogOpen || widget.controller.isBusy) return;
+
+    final id = log.id;
+    if (id == null) return;
+
+    setState(() => _dialogOpen = true);
+
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Delete set?'),
+          content: Text(
+            'Delete "${log.exerciseLabel}" '
+            'with ${log.repetitions} repetitions? '
+            'The session will remain open.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted || confirmed != true) return;
+
+      await widget.controller.deleteSet(id);
+    } finally {
+      if (mounted) {
+        setState(() => _dialogOpen = false);
+      }
+    }
+  }
+
+  Future<void> _resetSession() async {
+    if (_dialogOpen || widget.controller.isBusy) return;
+
+    setState(() => _dialogOpen = true);
 
     try {
       final confirmed = await showDialog<bool>(
@@ -89,9 +153,23 @@ class _WorkoutSessionPanelState extends State<WorkoutSessionPanel> {
       _repetitionsController.clear();
     } finally {
       if (mounted) {
-        setState(() => _confirmingReset = false);
+        setState(() => _dialogOpen = false);
       }
     }
+  }
+
+  Future<void> _finishSession() async {
+    if (_dialogOpen || widget.controller.isBusy) return;
+
+    final finished = await widget.controller.finishSession();
+
+    if (!mounted || !finished) return;
+
+    _exerciseController.clear();
+    _repetitionsController.clear();
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Session finished.')));
   }
 
   @override
@@ -108,7 +186,8 @@ class _WorkoutSessionPanelState extends State<WorkoutSessionPanel> {
       animation: widget.controller,
       builder: (context, child) {
         final controller = widget.controller;
-        final busy = controller.isBusy || _confirmingReset;
+        final busy = controller.isBusy || _dialogOpen;
+        final logs = controller.sessionLogs;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -171,7 +250,7 @@ class _WorkoutSessionPanelState extends State<WorkoutSessionPanel> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              Text('Sets logged: ${controller.sessionLogs.length}'),
+              Text('Sets logged: ${logs.length}'),
               const SizedBox(height: 16),
               Form(
                 key: _setFormKey,
@@ -223,25 +302,48 @@ class _WorkoutSessionPanelState extends State<WorkoutSessionPanel> {
                 ),
               ),
               const SizedBox(height: 16),
-              if (controller.sessionLogs.isEmpty)
+              if (logs.isEmpty)
                 const Text('No sets logged in this session yet.')
               else
-                ...controller.sessionLogs.map(
+                ...logs.map(
                   (log) => Card(
                     key: ValueKey(log.id),
-                    child: ListTile(
-                      title: Text(log.exerciseLabel),
-                      subtitle: Text('${log.repetitions} repetitions'),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            log.exerciseLabel,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 4),
+                          Text('${log.repetitions} repetitions'),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            alignment: WrapAlignment.end,
+                            spacing: 8,
+                            children: [
+                              TextButton.icon(
+                                onPressed: busy ? null : () => _editSet(log),
+                                icon: const Icon(Icons.edit),
+                                label: const Text('Edit set'),
+                              ),
+                              TextButton.icon(
+                                onPressed: busy ? null : () => _deleteSet(log),
+                                icon: const Icon(Icons.delete_outline),
+                                label: const Text('Delete set'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               const SizedBox(height: 16),
               FilledButton.icon(
-                onPressed: busy || controller.sessionLogs.isEmpty
-                    ? null
-                    : () async {
-                        await controller.finishSession();
-                      },
+                onPressed: busy || logs.isEmpty ? null : _finishSession,
                 icon: const Icon(Icons.check),
                 label: const Text('Finish session'),
               ),
