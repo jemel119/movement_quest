@@ -198,12 +198,15 @@ void main() {
     await tester.tap(find.text('History'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Workout preferences'), findsOneWidget);
+    expect(
+      find.text('Your training history will appear here.'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Your preferences will appear here.'), findsOneWidget);
+    expect(find.text('Workout preferences'), findsOneWidget);
 
     await tester.tap(find.text('Workouts'));
     await tester.pumpAndSettle();
