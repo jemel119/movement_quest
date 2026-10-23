@@ -65,6 +65,11 @@ class SessionController extends ChangeNotifier {
 
       _sessionKey = first.sessionKey;
       _sessionLabel = first.sessionLabel;
+    } else if (loaded.any(
+      (log) => log.sessionKey == _sessionKey && log.sessionFinished,
+    )) {
+      _sessionKey = null;
+      _sessionLabel = null;
     }
 
     _logs = loaded;
@@ -155,6 +160,72 @@ class SessionController extends ChangeNotifier {
       failureMessage:
           'Could not save or refresh your set. Reload before retrying.',
     );
+  }
+
+  Future<bool> editSet({
+    required int logId,
+    required String exerciseLabel,
+    required int repetitions,
+  }) async {
+    if (!_canChangeSession) return false;
+
+    final existing = _findActiveSet(logId);
+
+    if (existing == null) {
+      _error = 'This set is not part of the active session.';
+      notifyListeners();
+      return false;
+    }
+
+    final exercise = exerciseLabel.trim();
+
+    if (exercise.isEmpty || repetitions <= 0) {
+      _error = 'Enter an exercise and positive whole-number repetitions.';
+      notifyListeners();
+      return false;
+    }
+
+    final updated = existing.copyWith(
+      exerciseLabel: exercise,
+      repetitions: repetitions,
+    );
+
+    return _write(
+      () async {
+        await _repository.updateLog(updated);
+      },
+      failureMessage:
+          'Could not update or refresh your set. Reload before retrying.',
+    );
+  }
+
+  Future<bool> deleteSet(int logId) async {
+    if (!_canChangeSession) return false;
+
+    if (_findActiveSet(logId) == null) {
+      _error = 'This set is not part of the active session.';
+      notifyListeners();
+      return false;
+    }
+
+    return _write(
+      () => _repository.deleteLog(logId),
+      failureMessage:
+          'Could not delete or refresh your set. Reload before retrying.',
+    );
+  }
+
+  TrainingLog? _findActiveSet(int id) {
+    for (final log in _logs) {
+      if (log.id == id &&
+          log.workoutId == workoutId &&
+          log.sessionKey == _sessionKey &&
+          !log.sessionFinished) {
+        return log;
+      }
+    }
+
+    return null;
   }
 
   Future<bool> finishSession() async {
