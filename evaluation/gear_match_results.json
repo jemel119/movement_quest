@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "evaluatedAtUtc": "2026-10-24T23:25:36.329462Z",
+  "sourceRevision": "a0632d2d77e3a9e7b7dc10483bed5b49a89843c2",
+  "casesCommit": "a0632d2d77e3a9e7b7dc10483bed5b49a89843c2",
+  "inputFile": "evaluation/gear_match_held_out.json",
+  "referenceBasis": "Required scoring rules, with ascending plan ID for equal scores.",
+  "sampleSize": 5,
+  "helper": {
+    "matches": 5,
+    "mismatches": 0,
+    "runtimeErrors": 0
+  },
+  "baseline": {
+    "matches": 3,
+    "mismatches": 2,
+    "runtimeErrors": 0
+  },
+  "cases": [
+    {
+      "id": "H1",
+      "description": "An equipment match outweighs the different-plan bonus.",
+      "referencePlanId": 11,
+      "helper": {
+        "planId": 11,
+        "score": 2,
+        "matchesReference": true,
+        "error": null
+      },
+      "baseline": {
+        "planId": 11,
+        "score": 2,
+        "matchesReference": true,
+        "error": null
+      }
+    },
+    {
+      "id": "H2",
+      "description": "Two matching plans differ on the recent-session rule. Multiple sets belong to one session.",
+      "referencePlanId": 44,
+      "helper": {
+        "planId": 44,
+        "score": 3,
+        "matchesReference": true,
+        "error": null
+      },
+      "baseline": {
+        "planId": 38,
+        "score": 2,
+        "matchesReference": false,
+        "error": null
+      }
+    },
+    {
+      "id": "H3",
+      "description": "No equipment preference is set. A newer unfinished session must be ignored.",
+      "referencePlanId": 52,
+      "helper": {
+        "planId": 52,
+        "score": 1,
+        "matchesReference": true,
+        "error": null
+      },
+      "baseline": {
+        "planId": 52,
+        "score": 0,
+        "matchesReference": true,
+        "error": null
+      }
+    },
+    {
+      "id": "H4",
+      "description": "No history is available. Two no-equipment matches use the lowest plan ID.",
+      "referencePlanId": 71,
+      "helper": {
+        "planId": 71,
+        "score": 2,
+        "matchesReference": true,
+        "error": null
+      },
+      "baseline": {
+        "planId": 71,
+        "score": 2,
+        "matchesReference": true,
+        "error": null
+      }
+    },
+    {
+      "id": "H5",
+      "description": "No plan matches the equipment preference. Equal session timestamps use ascending session keys.",
+      "referencePlanId": 96,
+      "helper": {
+        "planId": 96,
+        "score": 1,
+        "matchesReference": true,
+        "error": null
+      },
+      "baseline": {
+        "planId": 91,
+        "score": 0,
+        "matchesReference": false,
+        "error": null
+      }
+    }
+  ]
+}
