@@ -124,6 +124,12 @@ class FakeTrainingLogRepository extends Fake implements TrainingLogRepository {
 }
 
 void main() {
+  Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+    await tester.ensureVisible(finder);
+    await tester.pumpAndSettle();
+    await tester.tap(finder);
+  }
+
   Future<WorkoutController> openApp(
     WidgetTester tester,
     FakeWorkoutRepository repository,
@@ -183,7 +189,7 @@ void main() {
   }
 
   Future<void> openAddForm(WidgetTester tester) async {
-    await tester.tap(find.text('Add plan'));
+    await tapVisible(tester, find.text('Add plan'));
     await tester.pumpAndSettle();
   }
 
@@ -192,7 +198,7 @@ void main() {
 
     await tester.ensureVisible(button);
     await tester.pumpAndSettle();
-    await tester.tap(button);
+    await tapVisible(tester, button);
   }
 
   testWidgets('Navigation switches between the main pages', (tester) async {
@@ -200,18 +206,18 @@ void main() {
 
     expect(find.text('No-equipment routine'), findsOneWidget);
 
-    await tester.tap(find.text('History'));
+    await tapVisible(tester, find.text('History'));
     await tester.pumpAndSettle();
 
     expect(find.text('Session history'), findsOneWidget);
     expect(find.text('No training history yet.'), findsOneWidget);
 
-    await tester.tap(find.text('Settings'));
+    await tapVisible(tester, find.text('Settings'));
     await tester.pumpAndSettle();
 
     expect(find.text('Workout preferences'), findsOneWidget);
 
-    await tester.tap(find.text('Workouts'));
+    await tapVisible(tester, find.text('Workouts'));
     await tester.pumpAndSettle();
 
     expect(find.text('No-equipment routine'), findsOneWidget);
@@ -221,20 +227,20 @@ void main() {
   testWidgets('Equipment filtering updates the visible plans', (tester) async {
     await openApp(tester, exampleRepository());
 
-    await tester.tap(find.byType(DropdownButton<String>));
+    await tapVisible(tester, find.byType(DropdownButton<String>));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Band').last);
+    await tapVisible(tester, find.text('Band').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Band routine'), findsOneWidget);
     expect(find.text('No-equipment routine'), findsNothing);
     expect(find.text('Completed sessions: 2'), findsOneWidget);
 
-    await tester.tap(find.byType(DropdownButton<String>));
+    await tapVisible(tester, find.byType(DropdownButton<String>));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Dumbbells').last);
+    await tapVisible(tester, find.text('Dumbbells').last);
     await tester.pumpAndSettle();
 
     expect(find.text('No plans match this equipment filter.'), findsOneWidget);
@@ -311,7 +317,7 @@ void main() {
 
     await openApp(tester, repository);
 
-    await tester.tap(find.text('Edit'));
+    await tapVisible(tester, find.text('Edit'));
     await tester.pumpAndSettle();
 
     expect(find.text('Edit workout plan'), findsOneWidget);
@@ -359,12 +365,12 @@ void main() {
 
     await tester.ensureVisible(cancelButton);
     await tester.pumpAndSettle();
-    await tester.tap(cancelButton);
+    await tapVisible(tester, cancelButton);
     await tester.pumpAndSettle();
 
     expect(find.text('Discard changes?'), findsOneWidget);
 
-    await tester.tap(find.text('Keep editing'));
+    await tapVisible(tester, find.text('Keep editing'));
     await tester.pumpAndSettle();
 
     final titleField = tester.widget<TextFormField>(
@@ -375,10 +381,10 @@ void main() {
 
     await tester.ensureVisible(cancelButton);
     await tester.pumpAndSettle();
-    await tester.tap(cancelButton);
+    await tapVisible(tester, cancelButton);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Discard'));
+    await tapVisible(tester, find.text('Discard'));
     await tester.pumpAndSettle();
 
     expect(repository.records, isEmpty);
@@ -403,7 +409,7 @@ void main() {
     expect(find.text('Discard changes?'), findsOneWidget);
     expect(repository.records, isEmpty);
 
-    await tester.tap(find.text('Discard'));
+    await tapVisible(tester, find.text('Discard'));
     await tester.pumpAndSettle();
 
     expect(find.text('Add workout plan'), findsNothing);
@@ -509,7 +515,7 @@ void main() {
 
     repository.failReads = false;
 
-    await tester.tap(find.text('Retry'));
+    await tapVisible(tester, find.text('Retry'));
     await tester.pumpAndSettle();
 
     expect(repository.createCalls, 1);
@@ -523,7 +529,7 @@ void main() {
 
     await openApp(tester, repository);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Delete').first);
+    await tapVisible(tester, find.widgetWithText(TextButton, 'Delete').first);
     await tester.pumpAndSettle();
 
     expect(find.text('Delete workout plan?'), findsOneWidget);
@@ -535,7 +541,8 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(
+    await tapVisible(
+      tester,
       find.descendant(
         of: find.byType(AlertDialog),
         matching: find.text('Cancel'),
@@ -556,10 +563,11 @@ void main() {
 
     await openApp(tester, repository);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Delete').first);
+    await tapVisible(tester, find.widgetWithText(TextButton, 'Delete').first);
     await tester.pumpAndSettle();
 
-    await tester.tap(
+    await tapVisible(
+      tester,
       find.descendant(
         of: find.byType(AlertDialog),
         matching: find.widgetWithText(FilledButton, 'Delete'),
@@ -589,10 +597,11 @@ void main() {
 
     await openApp(tester, repository);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+    await tapVisible(tester, find.widgetWithText(TextButton, 'Delete'));
     await tester.pumpAndSettle();
 
-    await tester.tap(
+    await tapVisible(
+      tester,
       find.descendant(
         of: find.byType(AlertDialog),
         matching: find.widgetWithText(FilledButton, 'Delete'),
@@ -614,10 +623,11 @@ void main() {
 
     final controller = await openApp(tester, repository);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Delete').first);
+    await tapVisible(tester, find.widgetWithText(TextButton, 'Delete').first);
     await tester.pumpAndSettle();
 
-    await tester.tap(
+    await tapVisible(
+      tester,
       find.descendant(
         of: find.byType(AlertDialog),
         matching: find.widgetWithText(FilledButton, 'Delete'),
@@ -634,10 +644,11 @@ void main() {
 
     repository.failDeletes = false;
 
-    await tester.tap(find.widgetWithText(TextButton, 'Delete').first);
+    await tapVisible(tester, find.widgetWithText(TextButton, 'Delete').first);
     await tester.pumpAndSettle();
 
-    await tester.tap(
+    await tapVisible(
+      tester,
       find.descendant(
         of: find.byType(AlertDialog),
         matching: find.widgetWithText(FilledButton, 'Delete'),

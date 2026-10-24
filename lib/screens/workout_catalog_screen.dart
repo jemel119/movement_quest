@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/workout_controller.dart';
 import '../models/workout_plan.dart';
+import '../widgets/gear_match_panel.dart';
 import '../widgets/workout_card.dart';
 import 'workout_detail_screen.dart';
 import 'workout_editor_screen.dart';
@@ -138,120 +139,123 @@ class _WorkoutCatalogScreenState extends State<WorkoutCatalogScreen> {
         final busy = controller.isBusy || _confirmingDelete || _openingPage;
         final plans = controller.plans;
 
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 16,
-                    children: [
-                      Text(
-                        'Completed sessions: '
-                        '${controller.completedSessions}',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      IconButton(
-                        tooltip: 'Refresh workouts',
-                        onPressed: busy ? null : controller.load,
-                        icon: const Icon(Icons.refresh),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Equipment filter',
-                      border: OutlineInputBorder(),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: controller.equipmentFilter,
-                        isExpanded: true,
-                        onChanged: busy ? null : controller.setEquipmentFilter,
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text('All equipment'),
-                          ),
-                          ...WorkoutPlan.equipmentTags.map(
-                            (tag) => DropdownMenuItem<String>(
-                              value: tag,
-                              child: Text(tag),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: busy ? null : () => _openEditor(),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add plan'),
-                  ),
-                ],
-              ),
-            ),
-            if (controller.error != null)
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              GearMatchPanel(enabled: !busy, onViewPlan: _openDetails),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(4),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      controller.error!,
-                      semanticsLabel: 'Error: ${controller.error}',
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 16,
+                      children: [
+                        Text(
+                          'Completed sessions: '
+                          '${controller.completedSessions}',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        IconButton(
+                          tooltip: 'Refresh workouts',
+                          onPressed: busy ? null : controller.load,
+                          icon: const Icon(Icons.refresh),
+                        ),
+                      ],
                     ),
-                    TextButton(
-                      onPressed: busy ? null : controller.load,
-                      child: const Text('Retry'),
+                    const SizedBox(height: 12),
+                    InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Equipment filter',
+                        border: OutlineInputBorder(),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: controller.equipmentFilter,
+                          isExpanded: true,
+                          onChanged: busy
+                              ? null
+                              : controller.setEquipmentFilter,
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: null,
+                              child: Text('All equipment'),
+                            ),
+                            ...WorkoutPlan.equipmentTags.map(
+                              (tag) => DropdownMenuItem<String>(
+                                value: tag,
+                                child: Text(tag),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: busy ? null : () => _openEditor(),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add plan'),
                     ),
                   ],
                 ),
               ),
-            if (controller.isLoading)
-              const LinearProgressIndicator(semanticsLabel: 'Loading workouts'),
-            Expanded(
-              child: !controller.hasLoaded
-                  ? Center(
-                      child: Text(
-                        controller.isLoading
-                            ? 'Loading your workouts...'
-                            : 'Your workouts could not be loaded.',
+              if (controller.error != null)
+                Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Column(
+                    children: [
+                      Text(
+                        controller.error!,
+                        semanticsLabel: 'Error: ${controller.error}',
                       ),
-                    )
-                  : plans.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          controller.equipmentFilter == null
-                              ? 'No workout plans yet.'
-                              : 'No plans match this equipment filter.',
-                        ),
+                      TextButton(
+                        onPressed: busy ? null : controller.load,
+                        child: const Text('Retry'),
                       ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                      itemCount: plans.length,
-                      itemBuilder: (context, index) {
-                        final plan = plans[index];
-
-                        return WorkoutCard(
-                          key: ValueKey(plan.id),
-                          plan: plan,
-                          onView: busy ? null : () => _openDetails(plan),
-                          onEdit: busy ? null : () => _openEditor(plan: plan),
-                          onDelete: busy ? null : () => _deletePlan(plan),
-                        );
-                      },
-                    ),
-            ),
-          ],
+                    ],
+                  ),
+                ),
+              if (controller.isLoading)
+                const LinearProgressIndicator(
+                  semanticsLabel: 'Loading workouts',
+                ),
+              if (!controller.hasLoaded)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    controller.isLoading
+                        ? 'Loading your workouts...'
+                        : 'Your workouts could not be loaded.',
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else if (plans.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    controller.equipmentFilter == null
+                        ? 'No workout plans yet.'
+                        : 'No plans match this equipment filter.',
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else
+                ...plans.map(
+                  (plan) => WorkoutCard(
+                    key: ValueKey(plan.id),
+                    plan: plan,
+                    onView: busy ? null : () => _openDetails(plan),
+                    onEdit: busy ? null : () => _openEditor(plan: plan),
+                    onDelete: busy ? null : () => _deletePlan(plan),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
