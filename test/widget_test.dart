@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:movement_quest/controllers/preferences_controller.dart';
 import 'package:movement_quest/repositories/shared_preferences_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:movement_quest/models/training_log.dart';
 
 class FakeWorkoutRepository extends Fake implements WorkoutRepository {
   final List<WorkoutPlan> records;
@@ -117,6 +118,9 @@ class FakeWorkoutRepository extends Fake implements WorkoutRepository {
 class FakeTrainingLogRepository extends Fake implements TrainingLogRepository {
   @override
   Future<int> countFinishedSessions({int? workoutId}) async => 2;
+
+  @override
+  Future<List<TrainingLog>> getLogs({int? workoutId}) async => [];
 }
 
 void main() {
@@ -124,10 +128,9 @@ void main() {
     WidgetTester tester,
     FakeWorkoutRepository repository,
   ) async {
-    final controller = WorkoutController(
-      repository,
-      FakeTrainingLogRepository(),
-    );
+    final trainingRepository = FakeTrainingLogRepository();
+
+    final controller = WorkoutController(repository, trainingRepository);
 
     SharedPreferences.setMockInitialValues({});
 
@@ -146,6 +149,8 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          Provider<WorkoutRepository>.value(value: repository),
+          Provider<TrainingLogRepository>.value(value: trainingRepository),
           ChangeNotifierProvider<WorkoutController>.value(value: controller),
           ChangeNotifierProvider<PreferencesController>.value(
             value: preferencesController,
@@ -198,10 +203,8 @@ void main() {
     await tester.tap(find.text('History'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Your training history will appear here.'),
-      findsOneWidget,
-    );
+    expect(find.text('Session history'), findsOneWidget);
+    expect(find.text('No training history yet.'), findsOneWidget);
 
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
