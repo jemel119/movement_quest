@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../controllers/preferences_controller.dart';
 import '../models/app_preferences.dart';
 import '../models/workout_plan.dart';
+import '../widgets/reminder_panel.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,6 +16,8 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   AppPreferences? _displayedPreferences;
   double _effort = 3;
+
+  bool _reminderOpen = false;
 
   @override
   void initState() {
@@ -45,6 +48,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (saved) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Preferences saved.')));
+    }
+  }
+
+  Future<void> _openReminder() async {
+    if (_reminderOpen) return;
+
+    setState(() => _reminderOpen = true);
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Workout reminder'),
+          content: const SingleChildScrollView(
+            child: SizedBox(width: 400, child: ReminderPanel()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _reminderOpen = false);
+      }
     }
   }
 
@@ -165,6 +197,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
           Text(controller.error!, semanticsLabel: 'Error: ${controller.error}'),
         ],
+        const SizedBox(height: 24),
+        const Divider(),
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          onPressed: controller.isBusy || _reminderOpen ? null : _openReminder,
+          icon: const Icon(Icons.notifications_outlined),
+          label: const Text('Manage workout reminder'),
+        ),
       ],
     );
   }
