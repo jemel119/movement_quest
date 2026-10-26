@@ -6,6 +6,7 @@ import '../models/training_log.dart';
 import '../repositories/training_log_repository.dart';
 import '../widgets/history_editor_dialog.dart';
 import 'workout_detail_screen.dart';
+import '../widgets/training_summary_panel.dart';
 
 class HistoryScreen extends StatefulWidget {
   final bool isActive;
@@ -128,6 +129,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  Future<void> _openSummary() {
+    return _openEditor(
+      AlertDialog(
+        title: const Text('Training summary'),
+        content: const SingleChildScrollView(
+          child: SizedBox(width: 400, child: TrainingSummaryPanel()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -155,6 +173,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           'Session history',
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
+                      ),
+                      IconButton(
+                        tooltip: 'Training summary',
+                        onPressed: busy ? null : _openSummary,
+                        icon: const Icon(Icons.summarize_outlined),
                       ),
                       IconButton(
                         tooltip: 'Refresh history',
