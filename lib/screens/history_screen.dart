@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/history_controller.dart';
+import '../models/training_log.dart';
 import '../repositories/training_log_repository.dart';
+import '../widgets/history_editor_dialog.dart';
 import 'workout_detail_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -18,6 +20,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   late final HistoryController _controller;
 
   bool _openingWorkout = false;
+  bool _dialogOpen = false;
 
   @override
   void initState() {
@@ -40,7 +43,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _openWorkout(int workoutId) async {
-    if (_openingWorkout || _controller.isLoading) return;
+    if (_openingWorkout || _dialogOpen || _controller.isBusy) return;
 
     setState(() => _openingWorkout = true);
 
@@ -61,6 +64,70 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  Future<void> _openEditor(Widget dialog) async {
+    if (_dialogOpen || _openingWorkout || _controller.isBusy) {
+      return;
+    }
+
+    setState(() => _dialogOpen = true);
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => dialog,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _dialogOpen = false);
+      }
+    }
+  }
+
+  Future<void> _deleteSet(TrainingLog log) async {
+    if (_dialogOpen || _openingWorkout || _controller.isBusy) {
+      return;
+    }
+
+    final id = log.id;
+    if (id == null) return;
+
+    setState(() => _dialogOpen = true);
+
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Delete saved set?'),
+          content: Text(
+            'Delete "${log.exerciseLabel}" '
+            'with ${log.repetitions} repetitions? '
+            'If this is the final set, its session will disappear '
+            'from history.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted || confirmed != true) return;
+
+      await _controller.deleteSet(id);
+    } finally {
+      if (mounted) {
+        setState(() => _dialogOpen = false);
+      }
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -72,7 +139,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        final busy = _controller.isLoading || _openingWorkout;
+        final busy = _controller.isBusy || _openingWorkout || _dialogOpen;
 
         return Column(
           children: [
@@ -121,9 +188,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ],
               ),
             ),
-            if (_controller.isLoading)
+            if (_controller.isBusy)
               const LinearProgressIndicator(
-                semanticsLabel: 'Loading training history',
+                semanticsLabel: 'Updating training history',
               ),
             Expanded(
               child: !_controller.hasLoaded
@@ -175,21 +242,69 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 ),
                               ),
                               ...session.logs.map(
-                                (log) => ListTile(
-                                  title: Text(log.exerciseLabel),
-                                  subtitle: Text(
-                                    '${log.repetitions} repetitions',
+                                (log) => Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Text(log.exerciseLabel),
+                                      Text('${log.repetitions} repetitions'),
+                                      Wrap(
+                                        alignment: WrapAlignment.end,
+                                        spacing: 8,
+                                        children: [
+                                          TextButton(
+                                            onPressed: busy
+                                                ? null
+                                                : () => _openEditor(
+                                                    HistoryEditorDialog.editSet(
+                                                      controller: _controller,
+                                                      log: log,
+                                                    ),
+                                                  ),
+                                            child: const Text('Edit set'),
+                                          ),
+                                          TextButton(
+                                            onPressed: busy
+                                                ? null
+                                                : () => _deleteSet(log),
+                                            child: const Text('Delete set'),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
                               Padding(
                                 padding: const EdgeInsets.all(12),
-                                child: TextButton.icon(
-                                  onPressed: busy
-                                      ? null
-                                      : () => _openWorkout(session.workoutId),
-                                  icon: const Icon(Icons.visibility_outlined),
-                                  label: const Text('View workout'),
+                                child: Wrap(
+                                  spacing: 8,
+                                  children: [
+                                    TextButton.icon(
+                                      onPressed: busy
+                                          ? null
+                                          : () =>
+                                                _openWorkout(session.workoutId),
+                                      icon: const Icon(
+                                        Icons.visibility_outlined,
+                                      ),
+                                      label: const Text('View workout'),
+                                    ),
+                                    TextButton.icon(
+                                      onPressed: busy
+                                          ? null
+                                          : () => _openEditor(
+                                              HistoryEditorDialog.renameSession(
+                                                controller: _controller,
+                                                session: session,
+                                              ),
+                                            ),
+                                      icon: const Icon(Icons.edit),
+                                      label: const Text('Rename session'),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
