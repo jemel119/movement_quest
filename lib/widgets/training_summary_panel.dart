@@ -6,6 +6,7 @@ import '../models/training_summary.dart';
 import '../repositories/summary_file_repository.dart';
 import '../repositories/training_log_repository.dart';
 import '../services/training_summary_service.dart';
+import 'animated_summary_totals.dart';
 
 class TrainingSummaryPanel extends StatefulWidget {
   final TrainingSummaryService? service;
@@ -193,15 +194,10 @@ class _TrainingSummaryPanelState extends State<TrainingSummaryPanel> {
         if (_message != null) ...[const SizedBox(height: 16), Text(_message!)],
         if (summary != null) ...[
           const SizedBox(height: 16),
-          Text(
-            _showingSavedSummary ? 'Saved file snapshot' : 'Generated snapshot',
-            style: Theme.of(context).textTheme.titleMedium,
+          AnimatedSummaryTotals(
+            summary: summary,
+            isSaved: _showingSavedSummary,
           ),
-          const SizedBox(height: 8),
-          Text('Completed sessions: ${summary.completedSessions}'),
-          Text('Unfinished sessions: ${summary.unfinishedSessions}'),
-          Text('Total sets: ${summary.totalSets}'),
-          Text('Total repetitions: ${summary.totalRepetitions}'),
           const SizedBox(height: 12),
           Text(
             'Generated: '
